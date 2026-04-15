@@ -235,7 +235,7 @@ def play_game(
 
     if not limit_resources:
         init_timeout = 30
-        play_time = 60
+        play_time = 240
 
     # setup main thread queue for getting results
     main_q_a = Queue()
@@ -441,6 +441,13 @@ def play_game(
             else:
                 search_result = False
                 board.player_worker.decrement_points(RAT_PENALTY)
+
+            # Re-check winner after search points are applied. check_win() ran
+            # inside apply_move before search points were awarded, so if the game
+            # just ended by points the stored result may be stale.
+            if board.is_game_over() and board.win_reason == WinReason.POINTS:
+                board.winner = None
+                board.check_win()
 
         searches.append((search_loc, search_result))
 
