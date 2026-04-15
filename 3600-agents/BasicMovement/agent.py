@@ -24,7 +24,7 @@ class PlayerAgent:
     
     def expectminimax_root(self, board, time_left):
         moves = board.get_valid_moves()
-        return max(moves, key=lambda m: self._expect(
+        return max(moves, key=lambda m: self.expect(
             board.forecast_move(m), self.max_depth - 1
         ))
     
@@ -36,7 +36,7 @@ class PlayerAgent:
             return self._heuristic(board)
         board.reverse_perspective()
         moves = board.get_valid_moves()
-        best = min(self._max_node(board.forecast_move(m), depth - 1) for m in moves)
+        best = min(self.max_node(board.forecast_move(m), depth - 1) for m in moves)
         board.reverse_perspective()
         return best
     
@@ -44,9 +44,11 @@ class PlayerAgent:
         if depth == 0 or board.is_game_over():
             return self._heuristic(board)
         moves = board.get_valid_moves()
-        return max(self._expect(board.forecast_move(m), depth - 1) for m in moves)
+        return max(self.expect(board.forecast_move(m), depth - 1) for m in moves)
     
-    def carpet_potential(board, x: int, y: int) -> float:
+    
+    
+    def carpet_potential(self, board, x: int, y: int) -> float:
         total = 0.0
         for dx, dy, direction in [
             (1, 0, Direction.RIGHT),
@@ -82,7 +84,7 @@ class PlayerAgent:
         # THIS is where your carpet scoring logic lives
         # now it's evaluating a future board state, not just one move
         carpet_score = self.carpet_potential(board, *board.player_worker.get_location())
-        rat_ev = self.hmm.search_ev()
+        rat_ev = self.search_ev()
         return board.player_worker.get_points() - board.opponent_worker.get_points() \
              + 0.3 * carpet_score + rat_ev
 
