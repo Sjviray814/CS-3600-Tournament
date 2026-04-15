@@ -1,0 +1,39 @@
+# Match replays
+3600-agents/matches/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Env
+.env
+.venv/
+env/
+venv/
+
+# Transition matrices are binary data shipped with the engine
+engine/transition_matrices/*.pkl
+
+# Byte-compiled / optimized
+*.so
+
+# Jupyter
+.ipynb_checkpoints/
