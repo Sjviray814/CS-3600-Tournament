@@ -4,9 +4,9 @@ import random
 import jax.numpy as jnp
 import numpy as np
 import jax
-from engine.game.enums import Cell, Noise, BOARD_SIZE
+from game.enums import Cell, Noise, BOARD_SIZE
 
-from engine.game import board, move, enums
+from game import board, move, enums
 
 EMISSION_PROBS = jnp.array([
     [0.7,  0.15, 0.15],  # SPACE

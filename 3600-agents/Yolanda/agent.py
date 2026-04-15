@@ -2,7 +2,7 @@ from collections.abc import Callable
 from typing import List, Set, Tuple
 import random
 
-from engine.game import board, move, enums
+from game import board, move, enums
 
 
 class PlayerAgent:
