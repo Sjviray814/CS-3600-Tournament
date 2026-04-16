@@ -4,8 +4,8 @@ import random
 import jax.numpy as jnp
 import numpy as np
 import jax
-from engine.game import board as board_module, move
-from engine.game.enums import Cell, Noise, BOARD_SIZE, Direction, CARPET_POINTS_TABLE, MoveType
+from game import board as board_module, move
+from game.enums import Cell, Noise, BOARD_SIZE, Direction, CARPET_POINTS_TABLE, MoveType
 
 EMISSION_PROBS = jnp.array([
     [0.7,  0.15, 0.15],  # space
