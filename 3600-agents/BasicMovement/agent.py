@@ -2,8 +2,8 @@ from collections.abc import Callable
 from typing import List, Set, Tuple
 import random
 
-from engine.game import board, move, enums
-from engine.game.enums import Direction, BOARD_SIZE, CARPET_POINTS_TABLE
+from game import board, move, enums
+from game.enums import Direction, BOARD_SIZE, CARPET_POINTS_TABLE
 
 
 class PlayerAgent:
