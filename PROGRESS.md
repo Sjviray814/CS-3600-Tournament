@@ -34,10 +34,16 @@ Located in `3600-agents/Challenger/`
    - Opponent carpet potential (threat)
    - Proximity to open/primeable squares
 
-### Test Results (v1)
-- 15/15 wins vs Yolanda (random), margins 10-30+ pts
-- 5/5 wins vs RatGuesser
-- ~3-5 seconds per game total
+### Test Results (v1) — 120/120 wins
+| Matchup | As Player A | As Player B |
+|---|---|---|
+| vs Yolanda (random) | 20-0 | 20-0 |
+| vs RatGuesser (HMM only) | 20-0 | 20-0 |
+| vs BasicMovement (unfinished minimax) | 20-0 | 20-0 |
+
+- Typical win margins: 10-30+ pts
+- ~3-5 seconds per game total (well within 240s budget)
+- **Not yet tested against George/Albert/Carrie** — those are only on bytefight.org
 
 ## TODO - Improvements Needed to Beat Carrie
 - [ ] Better heuristic: cell potential scoring + distance awareness
