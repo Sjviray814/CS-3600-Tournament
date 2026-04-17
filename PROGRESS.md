@@ -191,40 +191,115 @@ Must implement TT + iterative deepening + null move pruning.
 
 ---
 
-## Current Status (as of Apr 16 afternoon)
-- **agent.py** on disk: still contains v4 aggressive rat thresholds
-- **Deployed zip**: v4 — confirmed 1W-16L across varied opponents
-- **v2.zip (40% baseline)** — still the safest fallback to ship
-- **Next session**: design v5 with a clear priority order (see below)
+## Decision (Apr 16 evening)
+- **v4 archived** to `v4-archive` branch (commit 57baaea) — includes NMP gated off
+- **Baseline reset**: extracted v2 source (1100 lines) from `~/Downloads/tournament_v2.zip` over agent.py on `arnav-trials` branch — committed as **v5 baseline**
+- **v5 built on top of v2** with 3 surgical change-sets (CS-0 + CS-1 + CS-2). CS-3 (NMP retest) deferred until CS-1 validated — NMP over-prunes with broken heuristics.
 
 ---
 
-## TODO - Improvements Ordered by ROI
+## v5 Design — Approved Apr 16 evening
 
-### Tier 0 — Safety / don't lose free games
-- [ ] **Fix trapped-state fallback** (agent.py:751 and 898): return `Move.search()` not `Move.plain(Direction.RIGHT)` when no legal non-search move
-- [ ] **Revert to v2 source** and ship v2.zip as an insurance baseline before attempting v5
+### Architecture
+- Single file: `3600-agents/Challenger/agent.py`
+- 4 change-sets, each ~5-40 lines, stacked on v2. No refactor of search loop, TT, killers, history, quiescence, aspiration windows, or time management.
 
-### Tier 1 — Fix the heuristic (biggest win, per match data)
-- [ ] **Prime-bias heuristic**: when no len-3+ carpet available, prefer prime-building over plain moves (close the 11→25 prime gap)
-- [ ] **Patience on short carpets**: prefer len-3+ carpets; only fire len-2 carpet in endgame (last 5-8 turns) or when opponent threatens the line
-- [ ] **Line-extension ordering**: prioritize primes that extend existing runs toward length 3, 4, 5
-- [ ] **Belief-guided movement**: reward steps toward high-P(rat) regions
-- [ ] **Phase-specific objective**: late + ahead → win-probability mode (low variance)
+### CS-0 — Trapped-state safety fix
+**agent.py:752 (iterative_deepening_search) and :900 (greedy_move)**: when no non-search move is legal, return `Move.search((wx, wy))` (always legal, worst case -2 pts) instead of `Move.plain(Direction.RIGHT)` (may be invalid → `INVALID_MOVE` → instant forfeit).
 
-### Tier 2 — Search engine upgrades (TA-guided)
-- [ ] **Null move pruning** (R=2, disable in zugzwang-like late-game)
-- [ ] **Root-level SEARCH candidate** with belief EV
-- [ ] **Make/unmake** instead of `forecast_move` cloning
+### CS-1 — Heuristic patch (the big one)
+- **CS-1a. Prime-bias amplification** (`evaluate`): compute `prime_amp = 2.0 if my_cv < 4.0 else 1.0` and multiply `my_chain * w_mch` and `prim * w_prim` by it. When the best immediate carpet is worth <4 pts (len-1 or len-2), we double the weight on chain potential + primeable bonus so the bot invests in priming rather than burning len-2 or playing positional-only moves. Closes the 11→25 prime-count gap.
+- **CS-1b. Carpet-patience at root** (`iterative_deepening_search`): once per turn compute `patience_active = can_prime and turns_left > 5` at root. In the root move loop, apply `score -= 3.0` to every `CARPET len-2` move when `patience_active`. Existing len-1 penalty (-2) kept. Closes the carpet-length gap (us len-2 vs Albert len-3/4).
+- **CS-1c. Belief-guided movement** (module var + `evaluate`): once per turn call `set_belief_proximity(rat_tracker.belief)` which precomputes a 64-cell proximity table `_BELIEF_PROX[i] = sum(belief[c] * max(0, 8 - manhattan(i, c)))`. `evaluate()` adds `(my_bp - opp_bp*0.4) * W_BELIEF[phase]` with small weights `(0.15, 0.20, 0.10)`. Precomputation is O(64*64) per turn; eval lookup is O(1).
+
+### CS-2 — Root SEARCH post-gate
+In `PlayerAgent.play()` after `iterative_deepening_search` returns: if best_move is non-carpet (positional only, 0 pts immediate) AND `rat_tracker.best_guess().prob >= 0.45` AND `rat_ev >= 2.0` AND `search_cooldown == 0` AND `observations_since_reset >= 2`, override with `Move.search(best_guess)`. Treats SEARCH as a first-class root candidate when the tree couldn't find a carpet.
+
+### CS-3 — NMP retest (deferred)
+Cherry-pick NMP from v4-archive, toggle `NMP_ENABLED = True`, A/B test vs Yolanda. Only attempt after CS-1 is validated as an improvement. Prior A/B test showed NMP regressed by 60 pts/game because it trusted `evaluate()` as a cut gate; fixing the eval is a prerequisite.
+
+### Testing gates
+1. **Gate 1 — smoke**: Challenger v5 vs Yolanda, 3 games each side. Must win all, no crashes.
+2. **Gate 2 — sanity**: vs RatGuesser, BasicMovement, FirstIteration (3 each, both sides). Expect 100% WR.
+3. **Gate 3 — upload v5** to bytefight. Run 10+ ladder matches. Target >40% WR (match v2) minimum, >50% WR goal.
+4. **Gate 4 — CS-3 decision**: if Gate 3 passes, cherry-pick NMP and re-test.
+
+---
+
+## v6 — Data-Driven Overhaul (Apr 16, based on 57-game deep analysis)
+
+### Deep analysis performed
+- **27 games of Michael (#1, bot "Argghhhh")** — 17W-7L-3T
+- **20 games of Carrie (TA bot)** — 10W-8L-2T
+- **10 games of us (v5) vs Albert Lite** — 2W-8L, -14.0 margin/game
+
+### Key correlations across 57 games
+- Carpet pts → score: r = **+0.692** (strongest predictor)
+- % search turns → score: r = **-0.471** (searching hurts)
+- % scoring turns → score: r = **+0.561**
+
+### v6 changes (on v5)
+1. Raised rat search thresholds (prob 0.40-0.55, min_obs 3/5, cooldown 3) — target ~6 searches/game
+2. Removed CS-2 post-gate (was adding unvetted searches after tree search)
+3. Boosted carpet eval weights 3x (W_MY_CARPET 2.0/3.0/4.0)
+4. Removed len-2 carpet-patience penalty (need MORE carpets, not longer)
+
+### v6 results vs Albert Lite (10 games, matches 58-67)
+- **5W-5L, +2.5 margin/game** (up from 2W-8L, -14.0)
+- Searches: 6.1/g at 57% hit rate (was 13.3 at 35%)
+- Carpets: 4.5/g, 12.8 pts/g (was 3.1, 9.5)
+- Scoring: Us 39.5 vs Albert 37.0
+
+### Remaining gap
+- Albert: 7.5 carpets/g, 18.7 carpet pts/g vs our 4.5/g, 12.8 pts/g
+- Root cause: our eval only values LOCAL carpet potential; top bots value board-wide primed infrastructure
+
+---
+
+## v7 — Board-Wide Infrastructure Eval (Apr 16, current)
+
+### Structural insight
+Michael (#1) has **43% of carpets with 0 consecutive primes immediately before** — he primes areas, leaves, returns later. His eval values ALL primed runs on the board weighted by distance. This drives emergent "prime area A, leave, return to carpet" behavior through search. Our eval only sees immediate/1-step carpet potential.
+
+### v7 changes (on v6)
+1. **Board-wide primed infrastructure eval** — new `_primed_infrastructure()` function scans ALL horizontal/vertical primed runs, weights by CARPET_POINTS[len] × distance discount to nearest endpoint. Cached by primed_mask (50k entry LRU). New weights W_MY_INFRA (0.15/0.25/0.10), W_OPP_INFRA (0.08/0.15/0.08). Integrated as component #10 in evaluate().
+2. **Flattened time management** — 4.5s early, 4.0s mid, 3.5s late (was 0.7x/1.6x/0.9x adaptive). v6 used only 113s of 240s; targets 150-170s like Carrie (4.01s fixed) and Michael (3.25s avg).
+3. **Full-line prime move ordering** — checks both horizontal AND vertical runs through newly primed cell (was only checking run behind). Better alpha-beta pruning for infrastructure-building moves.
+4. **HMM belief zeroing on miss** — when player or opponent searches and misses, sets P(rat at cell) = 0 and renormalizes. Provably correct; improves belief sharpness for next search.
+
+### v7 smoke test
+- Beat Yolanda **45-1**, used 120.5s of 240s, reached depth 8
+- Awaiting bytefight validation vs Albert Lite
+
+---
+
+## Current Status (as of Apr 16 night)
+- **agent.py** on disk: v7 = v2 + CS-0 + CS-1(a/b/c) + v6 changes + v7 infra eval
+- **Zip**: pending creation (`~/Downloads/tournament_v7.zip`)
+- **Next**: upload to bytefight, run 10+ scrimmages vs Albert Lite, compare metrics
+
+---
+
+## TODO - Remaining Improvements
+
+### Done
+- [x] Fix trapped-state fallback (CS-0) — v5
+- [x] Prime-bias heuristic (CS-1a) — v5
+- [x] Patience on short carpets (CS-1b) — v5 (removed in v6)
+- [x] Belief-guided movement (CS-1c) — v5
+- [x] Root-level SEARCH candidate (CS-2) — v5 (removed in v6)
+- [x] Raised search thresholds — v6
+- [x] Boosted carpet eval weights — v6
+- [x] Board-wide primed infrastructure eval — v7
+- [x] Flattened time management — v7
+- [x] Full-line prime move ordering — v7
+- [x] HMM belief zeroing on miss — v7
+
+### Next up
+- [ ] **Null move pruning** — re-enable after infrastructure eval validated
+- [ ] **Make/unmake** instead of `forecast_move` cloning (biggest speed lever)
 - [ ] **Late Move Reductions (LMR)** on quiet tail moves
-- [ ] **Futility pruning** near leaves
-- [ ] **Check-style extensions** for carpet threats
-
-### Tier 3 — Meta / infrastructure
-- [ ] **Opponent-style adaptation**: infer opponent type from first 3-5 turns, tune live
-- [ ] **Info-gain rat policy**: entropy-reduction term in search EV
-- [ ] **Local Albert-Lite clone** or re-use observed opponents as heuristic sparring partners
-- [ ] **Re-verify analysis scripts**: fix A/B indexing assumption (`turn i` is A iff `player_a_just_moved`, NOT `i % 2 == 0`)
-- [ ] **Rat search: keep v2 thresholds** (prob=0.35 even) — positive EV confirmed mathematically
+- [ ] **Phase-specific objective**: late + ahead → minimize variance
+- [ ] **Opponent-style adaptation**: infer type from first 3-5 turns
 - [ ] Endgame strategy refinement (final 5-10 turns)
-- [ ] Hyperparameter tuning across many games (needs sparring partners first)
+- [ ] Hyperparameter tuning (needs scrimmage data)
